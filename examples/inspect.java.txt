@@ -1,0 +1,15 @@
+System.out.println("MODEL_LABEL=" + model.label());
+for (String p : model.param().varnames()) {
+  System.out.println("PARAM " + p + "=" + model.param().get(p));
+}
+for (String c : model.component().tags()) {
+  System.out.println("COMPONENT " + c);
+  for (String g : model.component(c).geom().tags()) {
+    System.out.println("GEOMETRY " + g);
+    for (String f : model.component(c).geom(g).feature().tags()) {
+      System.out.println("FEATURE " + f + " TYPE=" + model.component(c).geom(g).feature(f).getType());
+    }
+  }
+  for (String p : model.component(c).physics().tags()) { System.out.println("PHYSICS " + p); }
+}
+for (String s : model.study().tags()) { System.out.println("STUDY " + s); }

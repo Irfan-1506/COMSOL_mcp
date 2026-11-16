@@ -1,0 +1,30 @@
+// 2D heated square: all boundaries held at T0, uniform internal heating.
+// Requires license access to the HeatTransfer physics interface.
+model.param().set("L", "10[mm]");
+model.param().set("T0", "293.15[K]");
+model.param().set("Q0", "1e6[W/m^3]");
+model.component().create("comp1", true);
+model.component("comp1").geom().create("geom1", 2);
+model.component("comp1").geom("geom1").create("sq1", "Square");
+model.component("comp1").geom("geom1").feature("sq1").set("size", "L");
+model.component("comp1").geom("geom1").run();
+model.component("comp1").material().create("mat1", "Common");
+model.component("comp1").material("mat1").propertyGroup("def").set("thermalconductivity", new String[]{"10[W/(m*K)]"});
+model.component("comp1").material("mat1").propertyGroup("def").set("density", "7800[kg/m^3]");
+model.component("comp1").material("mat1").propertyGroup("def").set("heatcapacity", "500[J/(kg*K)]");
+model.component("comp1").physics().create("ht", "HeatTransfer", "geom1");
+model.component("comp1").physics("ht").create("temp1", "TemperatureBoundary", 1);
+model.component("comp1").physics("ht").feature("temp1").selection().all();
+model.component("comp1").physics("ht").feature("temp1").set("T0", "T0");
+model.component("comp1").physics("ht").create("hs1", "HeatSource", 2);
+model.component("comp1").physics("ht").feature("hs1").selection().all();
+model.component("comp1").physics("ht").feature("hs1").set("Q0", "Q0");
+model.component("comp1").mesh().create("mesh1");
+model.component("comp1").mesh("mesh1").autoMeshSize(4);
+model.component("comp1").mesh("mesh1").run();
+model.study().create("std1");
+model.study("std1").create("stat", "Stationary");
+model.study("std1").run();
+model.result().create("pg1", "PlotGroup2D");
+model.result("pg1").create("surf1", "Surface");
+model.result("pg1").feature("surf1").set("expr", "T");

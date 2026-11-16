@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+models/
+mcp-config.json
+verification.json
+*.pyc
+.env
+.env.*
+*.log
