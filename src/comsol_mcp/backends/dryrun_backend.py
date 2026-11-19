@@ -500,3 +500,239 @@ class DryRunBackend:
             raise ValueError(f"Unsupported action '{action}'. Use create, set, toggle, or delete.")
         self._record("node_mutate", model=m.name, category=category, action=action, tag=tag, parent=parent_tag)
         return {"ok": True, "category": category, "action": action, "tag": tag, "backend": "dryrun"}
+
+    # --- Extended parity methods ---
+    def model_export_java(self, output_path: str, model_name: Optional[str] = None) -> dict[str, Any]:
+        from ..codegen.java_gen import write_model_java
+
+        info = self.model_inspect(model_name)
+        spec = {
+            "parameters": {k: v["expression"] for k, v in info["parameters"].items()},
+            "studies": [{"tag": k, "type": "Stationary"} for k in info["studies"].keys()],
+        }
+        res = write_model_java(output_path, class_name=info["name"], spec=spec)
+        return {"ok": True, "model": info["name"], "java_path": res["filepath"], "backend": "dryrun"}
+
+    def model_audit(self, model_name: Optional[str] = None) -> dict[str, Any]:
+        info = self.model_inspect(model_name)
+        summary = {
+            "component_count": len(info["components"]),
+            "parameter_count": len(info["parameters"]),
+            "study_count": len(info["studies"]),
+            "solution_count": len(info["solutions"]),
+            "plot_count": len(info["plots"]),
+        }
+        return {"ok": True, "summary": summary, "tree": info, "backend": "dryrun"}
+
+    def component_list(self, model_name: Optional[str] = None) -> dict[str, Any]:
+        m = self._get_model(model_name)
+        return {"model": m.name, "components": sorted(m.components.keys())}
+
+    def param_get(self, name: str, model_name: Optional[str] = None) -> dict[str, Any]:
+        m = self._get_model(model_name)
+        if name not in m.parameters:
+            raise KeyError(f"Parameter '{name}' not found.")
+        return {"model": m.name, "name": name, **m.parameters[name]}
+
+    def param_description(self, name: str, description: Optional[str] = None, model_name: Optional[str] = None) -> dict[str, Any]:
+        m = self._get_model(model_name)
+        if name not in m.parameters:
+            raise KeyError(f"Parameter '{name}' not found.")
+        if description is not None:
+            m.parameters[name]["description"] = description
+        return {"model": m.name, "name": name, "description": m.parameters[name]["description"]}
+
+    def param_sweep_setup(
+        self,
+        study_tag: str,
+        parameter_name: str,
+        values: list[str] | str,
+        *,
+        sweep_tag: str = "param",
+        model_name: Optional[str] = None,
+    ) -> dict[str, Any]:
+        m = self._get_model(model_name)
+        study = m.studies.setdefault(study_tag, {"steps": {}, "solved": False})
+        vals = values if isinstance(values, list) else [values]
+        study["steps"][sweep_tag] = {"type": "Parametric", "settings": {"pname": parameter_name, "plistarr": vals}}
+        self._record("param_sweep_setup", model=m.name, study=study_tag, param=parameter_name, values=vals)
+        return {"ok": True, "study": study_tag, "sweep_tag": sweep_tag, "parameter": parameter_name, "values": vals}
+
+    def geometry_list(self, comp_tag: str = "comp1", model_name: Optional[str] = None) -> dict[str, Any]:
+        m = self._get_model(model_name)
+        comp = m.ensure_component(comp_tag)
+        return {"component": comp_tag, "geometries": {k: {"dim": v["dim"], "built": v["built"], "features": list(v["features"].keys())} for k, v in comp["geometries"].items()}}
+
+    def geometry_create(self, geom_tag: str = "geom1", dim: int = 3, comp_tag: str = "comp1", model_name: Optional[str] = None) -> dict[str, Any]:
+        m = self._get_model(model_name)
+        comp = m.ensure_component(comp_tag)
+        comp["geometries"].setdefault(geom_tag, {"dim": dim, "features": {}, "built": False})
+        self._record("geometry_create", model=m.name, geom=geom_tag, dim=dim)
+        return {"ok": True, "component": comp_tag, "geom": geom_tag, "dim": dim}
+
+    def geometry_list_features(self, geom_tag: str = "geom1", comp_tag: str = "comp1", model_name: Optional[str] = None) -> dict[str, Any]:
+        m = self._get_model(model_name)
+        geom = m.ensure_component(comp_tag)["geometries"].get(geom_tag)
+        if not geom:
+            raise ValueError(f"Geometry '{geom_tag}' not found.")
+        return {"geom": geom_tag, "features": copy.deepcopy(geom["features"])}
+
+    def geometry_boundary_info(self, geom_tag: str = "geom1", comp_tag: str = "comp1", model_name: Optional[str] = None) -> dict[str, Any]:
+        m = self._get_model(model_name)
+        geom = m.ensure_component(comp_tag)["geometries"].get(geom_tag)
+        if not geom:
+            raise ValueError(f"Geometry '{geom_tag}' not found.")
+        dim = geom["dim"]
+        count = 6 if dim == 3 else (4 if dim == 2 else 2)
+        labels = ["xmin", "xmax", "ymin", "ymax", "zmin", "zmax"][:count]
+        boundaries = [{"index": i + 1, "side": labels[i]} for i in range(count)]
+        return {"geom": geom_tag, "dim": dim, "boundary_count": count, "boundaries": boundaries, "backend": "dryrun"}
+
+    def mesh_list(self, comp_tag: str = "comp1", model_name: Optional[str] = None) -> dict[str, Any]:
+        m = self._get_model(model_name)
+        return {"component": comp_tag, "meshes": sorted(m.ensure_component(comp_tag)["meshes"].keys())}
+
+    def mesh_create_sequence(self, mesh_tag: str = "mesh1", geom_tag: str = "geom1", comp_tag: str = "comp1", model_name: Optional[str] = None) -> dict[str, Any]:
+        m = self._get_model(model_name)
+        m.ensure_component(comp_tag)["meshes"].setdefault(mesh_tag, {"geom": geom_tag, "size": 5, "built": False, "num_elements": 0})
+        return {"ok": True, "component": comp_tag, "mesh": mesh_tag, "geom": geom_tag}
+
+    def mesh_info(self, mesh_tag: str = "mesh1", comp_tag: str = "comp1", model_name: Optional[str] = None) -> dict[str, Any]:
+        m = self._get_model(model_name)
+        mesh = m.ensure_component(comp_tag)["meshes"].get(mesh_tag)
+        if not mesh:
+            raise ValueError(f"Mesh '{mesh_tag}' not found.")
+        return {"mesh": mesh_tag, **mesh, "backend": "dryrun"}
+
+    def physics_list(self, comp_tag: str = "comp1", model_name: Optional[str] = None) -> dict[str, Any]:
+        m = self._get_model(model_name)
+        phys = m.ensure_component(comp_tag)["physics"]
+        return {"component": comp_tag, "physics": {k: {"type": v["type"], "geom": v.get("geom")} for k, v in phys.items()}}
+
+    def physics_list_features(self, physics_tag: str, comp_tag: str = "comp1", model_name: Optional[str] = None) -> dict[str, Any]:
+        m = self._get_model(model_name)
+        ph = m.ensure_component(comp_tag)["physics"].get(physics_tag)
+        if not ph:
+            raise ValueError(f"Physics '{physics_tag}' not found.")
+        return {"physics": physics_tag, "type": ph["type"], "features": copy.deepcopy(ph["features"])}
+
+    def physics_remove(self, physics_tag: str, comp_tag: str = "comp1", model_name: Optional[str] = None) -> dict[str, Any]:
+        m = self._get_model(model_name)
+        phys = m.ensure_component(comp_tag)["physics"]
+        if physics_tag not in phys:
+            raise ValueError(f"Physics '{physics_tag}' not found.")
+        del phys[physics_tag]
+        return {"ok": True, "removed": physics_tag}
+
+    def physics_feature_info(self, physics_tag: str, feature_tag: str, comp_tag: str = "comp1", model_name: Optional[str] = None) -> dict[str, Any]:
+        m = self._get_model(model_name)
+        ph = m.ensure_component(comp_tag)["physics"].get(physics_tag)
+        if not ph or feature_tag not in ph["features"]:
+            raise ValueError(f"Feature '{physics_tag}/{feature_tag}' not found.")
+        return {"physics": physics_tag, "feature": feature_tag, **copy.deepcopy(ph["features"][feature_tag])}
+
+    def physics_feature_set(
+        self,
+        physics_tag: str,
+        feature_tag: str,
+        properties: dict[str, Any],
+        *,
+        selection: Optional[list[int] | str] = None,
+        comp_tag: str = "comp1",
+        model_name: Optional[str] = None,
+    ) -> dict[str, Any]:
+        m = self._get_model(model_name)
+        ph = m.ensure_component(comp_tag)["physics"].get(physics_tag)
+        if not ph or feature_tag not in ph["features"]:
+            raise ValueError(f"Feature '{physics_tag}/{feature_tag}' not found.")
+        feat = ph["features"][feature_tag]
+        feat["properties"].update(properties)
+        if selection is not None:
+            feat["selection"] = selection
+        return {"ok": True, "physics": physics_tag, "feature": feature_tag, "properties": dict(feat["properties"]), "rejected_properties": []}
+
+    def physics_feature_toggle(self, physics_tag: str, feature_tag: str, active: Optional[bool] = None, comp_tag: str = "comp1", model_name: Optional[str] = None) -> dict[str, Any]:
+        m = self._get_model(model_name)
+        ph = m.ensure_component(comp_tag)["physics"].get(physics_tag)
+        if not ph or feature_tag not in ph["features"]:
+            raise ValueError(f"Feature '{physics_tag}/{feature_tag}' not found.")
+        feat = ph["features"][feature_tag]
+        feat["active"] = (not feat.get("active", True)) if active is None else bool(active)
+        return {"ok": True, "physics": physics_tag, "feature": feature_tag, "active": feat["active"]}
+
+    def physics_feature_delete(self, physics_tag: str, feature_tag: str, comp_tag: str = "comp1", model_name: Optional[str] = None) -> dict[str, Any]:
+        m = self._get_model(model_name)
+        ph = m.ensure_component(comp_tag)["physics"].get(physics_tag)
+        if not ph or feature_tag not in ph["features"]:
+            raise ValueError(f"Feature '{physics_tag}/{feature_tag}' not found.")
+        del ph["features"][feature_tag]
+        return {"ok": True, "physics": physics_tag, "deleted": feature_tag}
+
+    def physics_interface_properties(
+        self,
+        physics_tag: str,
+        *,
+        set_properties: Optional[dict[str, Any]] = None,
+        comp_tag: str = "comp1",
+        model_name: Optional[str] = None,
+    ) -> dict[str, Any]:
+        m = self._get_model(model_name)
+        ph = m.ensure_component(comp_tag)["physics"].get(physics_tag)
+        if not ph:
+            raise ValueError(f"Physics '{physics_tag}' not found.")
+        if set_properties:
+            ph.setdefault("properties", {}).update(set_properties)
+        return {"ok": True, "physics": physics_tag, "properties": copy.deepcopy(ph.get("properties", {}))}
+
+    def study_list(self, model_name: Optional[str] = None) -> dict[str, Any]:
+        m = self._get_model(model_name)
+        return {"model": m.name, "studies": copy.deepcopy(m.studies)}
+
+    def study_wait(self, timeout_seconds: float = 60.0) -> dict[str, Any]:
+        return {"ok": True, "waited_seconds": 0.0, "timeout_seconds": timeout_seconds, "solver": dict(self._solver_state)}
+
+    def solutions_list(self, model_name: Optional[str] = None) -> dict[str, Any]:
+        m = self._get_model(model_name)
+        return {"model": m.name, "solutions": list(m.solutions)}
+
+    def datasets_list(self, model_name: Optional[str] = None) -> dict[str, Any]:
+        m = self._get_model(model_name)
+        return {"model": m.name, "datasets": list(m.datasets)}
+
+    def solver_feature_list(self, sol_tag: str = "sol1", model_name: Optional[str] = None) -> dict[str, Any]:
+        m = self._get_model(model_name)
+        return {"model": m.name, "solution": sol_tag, "features": ["st1", "v1", "s1"], "backend": "dryrun"}
+
+    def solver_feature_set(self, sol_tag: str, feature_tag: str, properties: dict[str, Any], model_name: Optional[str] = None) -> dict[str, Any]:
+        m = self._get_model(model_name)
+        self._record("solver_feature_set", model=m.name, sol=sol_tag, feature=feature_tag, properties=properties)
+        return {"ok": True, "solution": sol_tag, "feature": feature_tag, "properties": properties, "backend": "dryrun"}
+
+    def solver_feature_toggle(self, sol_tag: str, feature_tag: str, active: bool = True, model_name: Optional[str] = None) -> dict[str, Any]:
+        m = self._get_model(model_name)
+        self._record("solver_feature_toggle", model=m.name, sol=sol_tag, feature=feature_tag, active=active)
+        return {"ok": True, "solution": sol_tag, "feature": feature_tag, "active": active, "backend": "dryrun"}
+
+    def results_inner_values(self, dataset: Optional[str] = None, model_name: Optional[str] = None) -> dict[str, Any]:
+        m = self._get_model(model_name)
+        return {"model": m.name, "dataset": dataset or (m.datasets[-1] if m.datasets else "dset1"), "inner_values": [0.0, 0.5, 1.0], "backend": "dryrun"}
+
+    def results_outer_values(self, dataset: Optional[str] = None, model_name: Optional[str] = None) -> dict[str, Any]:
+        m = self._get_model(model_name)
+        return {"model": m.name, "dataset": dataset or (m.datasets[-1] if m.datasets else "dset1"), "outer_values": [1.0], "backend": "dryrun"}
+
+    def results_exports_list(self, model_name: Optional[str] = None) -> dict[str, Any]:
+        m = self._get_model(model_name)
+        return {"model": m.name, "exports": ["data1", "img1"], "backend": "dryrun"}
+
+    def results_plots_list(self, model_name: Optional[str] = None) -> dict[str, Any]:
+        m = self._get_model(model_name)
+        return {"model": m.name, "plots": sorted(m.plots.keys()), "backend": "dryrun"}
+
+    def results_interpolate(self, expression: str, coordinates: list[list[float]], dataset: Optional[str] = None, model_name: Optional[str] = None) -> dict[str, Any]:
+        m = self._get_model(model_name)
+        if not m.solutions:
+            raise ValueError("Model has no computed solutions yet.")
+        vals = [round(293.15 + idx * 2.5, 3) for idx in range(len(coordinates))]
+        return {"ok": True, "expression": expression, "dataset": dataset or m.datasets[-1], "coordinates": coordinates, "values": vals, "backend": "dryrun"}
+

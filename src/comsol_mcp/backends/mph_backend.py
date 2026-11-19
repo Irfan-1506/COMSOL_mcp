@@ -681,3 +681,258 @@ class MPhBackend:
         else:
             raise ValueError(f"Unsupported action '{action}'.")
         return {"ok": True, "category": category, "action": action, "tag": tag}
+
+    # --- Extended parity methods ---
+    def model_audit(self, model_name: Optional[str] = None) -> dict[str, Any]:
+        info = self.model_inspect(model_name)
+        summary = {
+            "component_count": len(info["components"]),
+            "parameter_count": len(info["parameters"]),
+            "study_count": len(info["studies"]),
+            "solution_count": len(info["solutions"]),
+            "plot_count": len(info["plots"]),
+        }
+        return {"ok": True, "summary": summary, "tree": info, "backend": "mph"}
+
+    def component_list(self, model_name: Optional[str] = None) -> dict[str, Any]:
+        mname, model = self._get_model(model_name)
+        return {"model": mname, "components": _to_list(self._java_model(model).component().tags())}
+
+    def param_get(self, name: str, model_name: Optional[str] = None) -> dict[str, Any]:
+        mname, model = self._get_model(model_name)
+        jm = self._java_model(model)
+        val = str(jm.param().get(name))
+        desc = ""
+        try:
+            desc = str(jm.param().descr(name))
+        except Exception:
+            pass
+        return {"model": mname, "name": name, "expression": val, "description": desc}
+
+    def param_description(self, name: str, description: Optional[str] = None, model_name: Optional[str] = None) -> dict[str, Any]:
+        mname, model = self._get_model(model_name)
+        jm = self._java_model(model)
+        if description is not None:
+            jm.param().descr(name, description)
+        return {"model": mname, "name": name, "description": str(jm.param().descr(name))}
+
+    def param_sweep_setup(
+        self,
+        study_tag: str,
+        parameter_name: str,
+        values: list[str] | str,
+        *,
+        sweep_tag: str = "param",
+        model_name: Optional[str] = None,
+    ) -> dict[str, Any]:
+        _, model = self._get_model(model_name)
+        jm = self._java_model(model)
+        if study_tag not in _to_list(jm.study().tags()):
+            jm.study().create(study_tag)
+        st = jm.study(study_tag)
+        if sweep_tag not in _to_list(st.feature().tags()):
+            st.create(sweep_tag, "Parametric")
+        vals = values if isinstance(values, list) else [values]
+        feat = st.feature(sweep_tag)
+        feat.set("pname", [parameter_name])
+        feat.set("plistarr", [" ".join(vals)])
+        return {"ok": True, "study": study_tag, "sweep_tag": sweep_tag, "parameter": parameter_name, "values": vals}
+
+    def geometry_list(self, comp_tag: str = "comp1", model_name: Optional[str] = None) -> dict[str, Any]:
+        _, model = self._get_model(model_name)
+        comp = self._java_model(model).component(comp_tag)
+        return {"component": comp_tag, "geometries": {g: {"features": _to_list(comp.geom(g).feature().tags())} for g in _to_list(comp.geom().tags())}}
+
+    def geometry_create(self, geom_tag: str = "geom1", dim: int = 3, comp_tag: str = "comp1", model_name: Optional[str] = None) -> dict[str, Any]:
+        _, model = self._get_model(model_name)
+        self._ensure_geom(self._java_model(model), comp_tag, geom_tag, dim)
+        return {"ok": True, "component": comp_tag, "geom": geom_tag, "dim": dim}
+
+    def geometry_list_features(self, geom_tag: str = "geom1", comp_tag: str = "comp1", model_name: Optional[str] = None) -> dict[str, Any]:
+        _, model = self._get_model(model_name)
+        g = self._java_model(model).component(comp_tag).geom(geom_tag)
+        feats = {ft: {"type": str(g.feature(ft).getType())} for ft in _to_list(g.feature().tags())}
+        return {"geom": geom_tag, "features": feats}
+
+    def geometry_boundary_info(self, geom_tag: str = "geom1", comp_tag: str = "comp1", model_name: Optional[str] = None) -> dict[str, Any]:
+        _, model = self._get_model(model_name)
+        g = self._java_model(model).component(comp_tag).geom(geom_tag)
+        dim = int(g.getSDim())
+        n_bnd = int(g.getNEntities(max(0, dim - 1)))
+        return {"geom": geom_tag, "dim": dim, "boundary_count": n_bnd, "boundaries": [{"index": i} for i in range(1, n_bnd + 1)], "backend": "mph"}
+
+    def mesh_list(self, comp_tag: str = "comp1", model_name: Optional[str] = None) -> dict[str, Any]:
+        _, model = self._get_model(model_name)
+        return {"component": comp_tag, "meshes": _to_list(self._java_model(model).component(comp_tag).mesh().tags())}
+
+    def mesh_create_sequence(self, mesh_tag: str = "mesh1", geom_tag: str = "geom1", comp_tag: str = "comp1", model_name: Optional[str] = None) -> dict[str, Any]:
+        _, model = self._get_model(model_name)
+        comp = self._java_model(model).component(comp_tag)
+        if mesh_tag not in _to_list(comp.mesh().tags()):
+            comp.mesh().create(mesh_tag, geom_tag)
+        return {"ok": True, "component": comp_tag, "mesh": mesh_tag, "geom": geom_tag}
+
+    def mesh_info(self, mesh_tag: str = "mesh1", comp_tag: str = "comp1", model_name: Optional[str] = None) -> dict[str, Any]:
+        _, model = self._get_model(model_name)
+        mesh = self._java_model(model).component(comp_tag).mesh(mesh_tag)
+        stat = mesh.stat()
+        return {"mesh": mesh_tag, "num_elements": int(stat.getNumElem()), "features": _to_list(mesh.feature().tags()), "backend": "mph"}
+
+    def physics_list(self, comp_tag: str = "comp1", model_name: Optional[str] = None) -> dict[str, Any]:
+        _, model = self._get_model(model_name)
+        comp = self._java_model(model).component(comp_tag)
+        return {"component": comp_tag, "physics": {p: {"type": str(comp.physics(p).getType())} for p in _to_list(comp.physics().tags())}}
+
+    def physics_list_features(self, physics_tag: str, comp_tag: str = "comp1", model_name: Optional[str] = None) -> dict[str, Any]:
+        _, model = self._get_model(model_name)
+        ph = self._java_model(model).component(comp_tag).physics(physics_tag)
+        feats = {ft: {"type": str(ph.feature(ft).getType())} for ft in _to_list(ph.feature().tags())}
+        return {"physics": physics_tag, "type": str(ph.getType()), "features": feats}
+
+    def physics_remove(self, physics_tag: str, comp_tag: str = "comp1", model_name: Optional[str] = None) -> dict[str, Any]:
+        _, model = self._get_model(model_name)
+        self._java_model(model).component(comp_tag).physics().remove(physics_tag)
+        return {"ok": True, "removed": physics_tag}
+
+    def physics_feature_info(self, physics_tag: str, feature_tag: str, comp_tag: str = "comp1", model_name: Optional[str] = None) -> dict[str, Any]:
+        _, model = self._get_model(model_name)
+        feat = self._java_model(model).component(comp_tag).physics(physics_tag).feature(feature_tag)
+        prop_names = _to_list(feat.properties())
+        props = {}
+        for p in prop_names:
+            try:
+                props[p] = str(feat.getString(p))
+            except Exception:
+                props[p] = "<non-string>"
+        return {"physics": physics_tag, "feature": feature_tag, "type": str(feat.getType()), "active": bool(feat.isActive()), "properties": props}
+
+    def physics_feature_set(
+        self,
+        physics_tag: str,
+        feature_tag: str,
+        properties: dict[str, Any],
+        *,
+        selection: Optional[list[int] | str] = None,
+        comp_tag: str = "comp1",
+        model_name: Optional[str] = None,
+    ) -> dict[str, Any]:
+        _, model = self._get_model(model_name)
+        feat = self._java_model(model).component(comp_tag).physics(physics_tag).feature(feature_tag)
+        if selection == "all":
+            feat.selection().all()
+        elif isinstance(selection, list):
+            feat.selection().set(selection)
+        elif isinstance(selection, str) and selection:
+            feat.selection().named(selection)
+        rejected = []
+        for k, v in properties.items():
+            try:
+                feat.set(k, v)
+            except Exception:
+                rejected.append(k)
+        return {"ok": True, "physics": physics_tag, "feature": feature_tag, "rejected_properties": rejected}
+
+    def physics_feature_toggle(self, physics_tag: str, feature_tag: str, active: Optional[bool] = None, comp_tag: str = "comp1", model_name: Optional[str] = None) -> dict[str, Any]:
+        _, model = self._get_model(model_name)
+        feat = self._java_model(model).component(comp_tag).physics(physics_tag).feature(feature_tag)
+        target = (not bool(feat.isActive())) if active is None else bool(active)
+        feat.active(target)
+        return {"ok": True, "physics": physics_tag, "feature": feature_tag, "active": target}
+
+    def physics_feature_delete(self, physics_tag: str, feature_tag: str, comp_tag: str = "comp1", model_name: Optional[str] = None) -> dict[str, Any]:
+        _, model = self._get_model(model_name)
+        self._java_model(model).component(comp_tag).physics(physics_tag).feature().remove(feature_tag)
+        return {"ok": True, "physics": physics_tag, "deleted": feature_tag}
+
+    def physics_interface_properties(
+        self,
+        physics_tag: str,
+        *,
+        set_properties: Optional[dict[str, Any]] = None,
+        comp_tag: str = "comp1",
+        model_name: Optional[str] = None,
+    ) -> dict[str, Any]:
+        _, model = self._get_model(model_name)
+        ph = self._java_model(model).component(comp_tag).physics(physics_tag)
+        props: dict[str, Any] = {}
+        for gname in _to_list(ph.prop().tags()) if hasattr(ph, "prop") else []:
+            grp = ph.prop(gname)
+            gdict: dict[str, Any] = {}
+            for pname in _to_list(grp.properties()):
+                if set_properties and pname in set_properties:
+                    grp.set(pname, set_properties[pname])
+                try:
+                    gdict[pname] = str(grp.getString(pname))
+                except Exception:
+                    gdict[pname] = "<non-string>"
+            props[gname] = gdict
+        return {"ok": True, "physics": physics_tag, "properties": props}
+
+    def study_list(self, model_name: Optional[str] = None) -> dict[str, Any]:
+        info = self.model_inspect(model_name)
+        return {"model": info["name"], "studies": info["studies"]}
+
+    def study_wait(self, timeout_seconds: float = 60.0) -> dict[str, Any]:
+        t0 = time.monotonic()
+        if self._solver_thread and self._solver_thread.is_alive():
+            self._solver_thread.join(timeout=timeout_seconds)
+        return {"ok": True, "waited_seconds": round(time.monotonic() - t0, 3), "solver": self._solver_state.to_dict()}
+
+    def solutions_list(self, model_name: Optional[str] = None) -> dict[str, Any]:
+        mname, model = self._get_model(model_name)
+        return {"model": mname, "solutions": _to_list(self._java_model(model).sol().tags())}
+
+    def datasets_list(self, model_name: Optional[str] = None) -> dict[str, Any]:
+        mname, model = self._get_model(model_name)
+        return {"model": mname, "datasets": _to_list(self._java_model(model).result().dataset().tags())}
+
+    def solver_feature_list(self, sol_tag: str = "sol1", model_name: Optional[str] = None) -> dict[str, Any]:
+        mname, model = self._get_model(model_name)
+        sol = self._java_model(model).sol(sol_tag)
+        return {"model": mname, "solution": sol_tag, "features": _to_list(sol.feature().tags()), "backend": "mph"}
+
+    def solver_feature_set(self, sol_tag: str, feature_tag: str, properties: dict[str, Any], model_name: Optional[str] = None) -> dict[str, Any]:
+        _, model = self._get_model(model_name)
+        feat = self._java_model(model).sol(sol_tag).feature(feature_tag)
+        for k, v in properties.items():
+            feat.set(k, v)
+        return {"ok": True, "solution": sol_tag, "feature": feature_tag, "properties": properties, "backend": "mph"}
+
+    def solver_feature_toggle(self, sol_tag: str, feature_tag: str, active: bool = True, model_name: Optional[str] = None) -> dict[str, Any]:
+        _, model = self._get_model(model_name)
+        self._java_model(model).sol(sol_tag).feature(feature_tag).active(bool(active))
+        return {"ok": True, "solution": sol_tag, "feature": feature_tag, "active": bool(active), "backend": "mph"}
+
+    def results_inner_values(self, dataset: Optional[str] = None, model_name: Optional[str] = None) -> dict[str, Any]:
+        mname, model = self._get_model(model_name)
+        vals = list(model.inner(dataset)) if hasattr(model, "inner") else []
+        return {"model": mname, "dataset": dataset, "inner_values": [float(x) for x in vals], "backend": "mph"}
+
+    def results_outer_values(self, dataset: Optional[str] = None, model_name: Optional[str] = None) -> dict[str, Any]:
+        mname, model = self._get_model(model_name)
+        vals = list(model.outer(dataset)) if hasattr(model, "outer") else []
+        return {"model": mname, "dataset": dataset, "outer_values": [float(x) for x in vals], "backend": "mph"}
+
+    def results_exports_list(self, model_name: Optional[str] = None) -> dict[str, Any]:
+        mname, model = self._get_model(model_name)
+        return {"model": mname, "exports": _to_list(self._java_model(model).result().export().tags()), "backend": "mph"}
+
+    def results_plots_list(self, model_name: Optional[str] = None) -> dict[str, Any]:
+        mname, model = self._get_model(model_name)
+        return {"model": mname, "plots": _to_list(self._java_model(model).result().tags()), "backend": "mph"}
+
+    def results_interpolate(self, expression: str, coordinates: list[list[float]], dataset: Optional[str] = None, model_name: Optional[str] = None) -> dict[str, Any]:
+        _, model = self._get_model(model_name)
+        jm = self._java_model(model)
+        interp = jm.result().numerical().create("interp_mcp", "Interp")
+        try:
+            if dataset:
+                interp.set("data", dataset)
+            interp.set("expr", [expression])
+            cols = list(zip(*coordinates)) if coordinates else []
+            interp.set("coord", [list(c) for c in cols])
+            vals = interp.getReal()
+            return {"ok": True, "expression": expression, "coordinates": coordinates, "values": [list(row) for row in vals], "backend": "mph"}
+        finally:
+            jm.result().numerical().remove("interp_mcp")
+

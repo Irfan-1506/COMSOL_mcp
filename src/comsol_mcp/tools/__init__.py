@@ -10,10 +10,12 @@ from ..knowledge import RagKnowledgeBase
 from ..validation import WorkflowManager
 from .batch_tools import register_batch_tools
 from .catalog_tools import register_catalog_tools
+from .core_extended import register_core_extended_tools
 from .core_mph import register_core_tools
 from .dryrun_tools import register_dryrun_tools
 from .gui_tools import register_gui_tools
 from .physics_domain import register_physics_domain_tools
+from .physics_extended import register_physics_extended_tools
 from .rag_tools import register_rag_tools
 from .validate_tools import register_validate_tools
 
@@ -31,9 +33,11 @@ def register_profile_tools(
 
     if "core" in profiles:
         register_core_tools(mcp, hub)
+        register_core_extended_tools(mcp, hub)
         mounted.append("core")
     if "physics" in profiles:
         register_physics_domain_tools(mcp, hub)
+        register_physics_extended_tools(mcp, hub)
         mounted.append("physics")
     if "batch" in profiles:
         register_batch_tools(mcp, hub)

@@ -26,8 +26,8 @@ def test_profile_gating_tool_counts(tmp_path: Path) -> None:
     all_bundle = build_server(profiles="all", workspace=str(tmp_path / "all"), dryrun=True)
     all_tools = list_registered_tools(all_bundle.mcp)
     all_resources = list_registered_resources(all_bundle.mcp)
-    assert len(all_tools) == 66
-    assert len(set(all_tools)) == 66
+    assert len(all_tools) == 179
+    assert len(set(all_tools)) == 179
     assert len(all_resources) == 4
     all_bundle.hub.shutdown()
 
@@ -38,7 +38,7 @@ def test_profile_gating_tool_counts(tmp_path: Path) -> None:
     batch_only.hub.shutdown()
 
     core_val = build_server(profiles="core,catalog,validate", workspace=str(tmp_path / "cv"), dryrun=True)
-    assert len(list_registered_tools(core_val.mcp)) == 34
+    assert len(list_registered_tools(core_val.mcp)) == 103
     core_val.hub.shutdown()
 
 
@@ -59,7 +59,7 @@ def test_cli_doctor_and_real_stdio_initialize(tmp_path: Path) -> None:
         check=True,
     )
     payload = json.loads(doc.stdout)
-    assert payload["tool_count"] == 35
+    assert payload["tool_count"] == 97
     assert payload["mounted_profiles"] == ["core", "batch"]
 
     # 2. Real stdio JSON-RPC initialize + tools/list handshake

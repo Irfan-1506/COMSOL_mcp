@@ -411,3 +411,39 @@ class CatalogStore:
                     finfo = ldata["features"][feature_name]
                     return {"source": f"xml:{lname}", "feature": feature_name, **finfo}
         raise ValueError(f"Feature '{feature_name}' not found in built-in or local XML catalog.")
+
+    def get_variables(self, physics_interface: str) -> dict[str, Any]:
+        """Return common dependent/post-processing field variables for a physics interface."""
+        var_map: dict[str, list[dict[str, str]]] = {
+            "HeatTransfer": [{"name": "T", "unit": "K", "descr": "Temperature"}, {"name": "ht.qx", "unit": "W/m^2", "descr": "Heat flux x-component"}, {"name": "ht.qmag", "unit": "W/m^2", "descr": "Heat flux magnitude"}],
+            "Electrostatics": [{"name": "V", "unit": "V", "descr": "Electric potential"}, {"name": "es.normE", "unit": "V/m", "descr": "Electric field norm"}, {"name": "es.intWe", "unit": "J", "descr": "Total electric energy"}],
+            "MagneticFields": [{"name": "mf.normB", "unit": "T", "descr": "Magnetic flux density norm"}, {"name": "mf.normH", "unit": "A/m", "descr": "Magnetic field norm"}, {"name": "mf.normJ", "unit": "A/m^2", "descr": "Current density norm"}],
+            "LaminarFlow": [{"name": "spf.U", "unit": "m/s", "descr": "Velocity magnitude"}, {"name": "u", "unit": "m/s", "descr": "Velocity x"}, {"name": "p", "unit": "Pa", "descr": "Pressure"}],
+            "SolidMechanics": [{"name": "solid.disp", "unit": "m", "descr": "Total displacement"}, {"name": "solid.mises", "unit": "Pa", "descr": "von Mises stress"}],
+            "PressureAcoustics": [{"name": "p", "unit": "Pa", "descr": "Total acoustic pressure"}, {"name": "acpr.Lp", "unit": "dB", "descr": "Sound pressure level"}],
+            "LithiumIonBatteryMPH": [{"name": "liion.phis", "unit": "V", "descr": "Electrode potential"}, {"name": "liion.phil", "unit": "V", "descr": "Electrolyte potential"}, {"name": "liion.cl", "unit": "mol/m^3", "descr": "Electrolyte salt concentration"}],
+            "SecondaryCurrentDistribution": [{"name": "siec.phil", "unit": "V", "descr": "Electrolyte potential"}, {"name": "siec.Ilmag", "unit": "A/m^2", "descr": "Electrolyte current density magnitude"}],
+        }
+        return {"interface": physics_interface, "variables": var_map.get(physics_interface, [])}
+
+    def get_discretization(self, physics_interface: str) -> dict[str, Any]:
+        """Return standard COMSOL shape-function discretization defaults for a physics interface."""
+        disc_map: dict[str, dict[str, str]] = {
+            "HeatTransfer": {"shape": "Lagrange", "default_order": "Linear (1) / Quadratic (2)", "property": "ShapeProperty_T"},
+            "Electrostatics": {"shape": "Lagrange", "default_order": "Quadratic (2)", "property": "ShapeProperty_V"},
+            "LaminarFlow": {"shape": "Lagrange (P1+P1 or P2+P1)", "default_order": "P1+P1", "property": "ShapeProperty_u_p"},
+            "SolidMechanics": {"shape": "Lagrange (Serendipity/Quadratic)", "default_order": "Quadratic (2)", "property": "ShapeProperty_u"},
+            "PressureAcoustics": {"shape": "Lagrange", "default_order": "Quadratic (2)", "property": "ShapeProperty_p"},
+            "CoefficientFormPDE": {"shape": "Lagrange", "default_order": "Quadratic (2)", "property": "ShapeProperty_u"},
+        }
+        return {"interface": physics_interface, "discretization": disc_map.get(physics_interface, {"shape": "Lagrange", "default_order": "Quadratic (2)"})}
+
+    def list_layer(self, layer: str, limit: int = 100) -> dict[str, Any]:
+        ldata = self._load_layer(layer)
+        if not ldata:
+            meta = self._load_meta()
+            available = sorted((meta or {}).get("layers", {}).keys())
+            raise ValueError(f"XML layer '{layer}' not found in cache. Run `catalog_build_local`. Available: {available}")
+        feats = sorted(ldata.get("features", {}).keys())
+        return {"layer": layer, "total_features": len(feats), "features": feats[:limit]}
+

@@ -120,3 +120,27 @@ def register_physics_builder(
         _update_pref_file(target_dir / "comsolserver.prefs", str(p), remove=unregister),
     ]
     return {"ok": True, "action": "unregistered" if unregister else "registered", "path": str(p), "updated": updated}
+
+
+def physics_builder_status(prefs_dir: Optional[str] = None) -> dict[str, Any]:
+    """Read current Physics Builder development file registration from COMSOL prefs files."""
+    target_dir = Path(prefs_dir).resolve() if prefs_dir else _default_prefs_dir()
+    files: dict[str, Any] = {}
+    for fname in ("comsol.prefs", "comsolserver.prefs"):
+        p = target_dir / fname
+        if not p.is_file():
+            files[fname] = {"exists": False, "usebuilder": "off", "developmentfiles": []}
+            continue
+        kv: dict[str, str] = {}
+        for line in p.read_text(encoding="utf-8", errors="replace").splitlines():
+            if "=" in line and not line.strip().startswith("#"):
+                k, v = line.split("=", 1)
+                kv[k.strip()] = v.strip()
+        dev = [x.strip() for x in kv.get("physicsbuilder.settings.developmentfiles", "").split(",") if x.strip()]
+        files[fname] = {
+            "exists": True,
+            "usebuilder": kv.get("physicsbuilder.settings.usebuilder", "off"),
+            "developmentfiles": dev,
+        }
+    return {"prefs_dir": str(target_dir), "files": files}
+

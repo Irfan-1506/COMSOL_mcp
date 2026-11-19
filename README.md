@@ -6,14 +6,16 @@ A clean-room, MIT-licensed, modular **Model Context Protocol (MCP)** server for 
 
 | Capability | Profile | Description |
 | :--- | :--- | :--- |
-| **Warm `mph` Interactive Session** | `core` (25 tools + 4 MCP resources) | Fast iterative modeling, parameters, geometry, selections, materials, physics, meshing, sync/async solving, results evaluation/export, versioned saves, `model_diff`, and generic low-level node mutation. |
-| **Domain Physics & Physics Builder** | `physics` (7 tools) | Electrochemistry/battery helpers, acoustics & PDE builders, multiphysics couplings, and custom `.mphphb` Physics Builder XML generation & registration. |
+| **Warm `mph` Interactive Session** | `core` (87 tools + 4 MCP resources) | Full parity interactive modeling: session, model CRUD/version/audit/diff/Java export, parameters & sweeps, geometry primitives/booleans/selections, materials, physics features, meshing, sync/async solving, results/interpolation/export, and generic low-level node mutation. |
+| **Domain Physics & Physics Builder** | `physics` (45 tools) | Full 10-tool Electrochemistry/battery suite, acoustics & PDE builders + boundary presets, interactive flow/heat setup helpers, multiphysics couplings, and custom `.mphphb` Physics Builder XML generation, registration & status. |
 | **Isolated Native CLI Batch Queue** | `batch` (10 tools) | Direct `comsolcompile` + `comsolbatch` async job queue (no `mph`/JPype needed), workspace file locking, non-destructive copy-on-edit `.mph` publication, completion-marker verification, short temp dir (`MAX_PATH` safe), and real OS process-tree cancellation. |
 | **Windows Desktop GUI & Live `Model1`** | `gui` (6 tools) | COMSOL Desktop process/window diagnostics, full/graphics-panel screenshots, restricted `model.` Java Shell execution, `mph` → Desktop sync, and live COMSOL Server `Model1` attach. |
-| **Offline COMSOL API Catalog** | `catalog` (4 tools) | Built-in physics/BC/multiphysics reference schemas plus a local extractor (`comsol-mcp catalog-build`) that decodes `<COMSOL_HOME>/data/completion/*.xml` from your own installation. |
+| **Offline COMSOL API Catalog** | `catalog` (11 tools) | Built-in physics/BC/variable/discretization reference schemas + `static_catalog_*` parity tools + local extractor (`comsol-mcp catalog-build`) decoding `<COMSOL_HOME>/data/completion/*.xml` from your own installation. |
 | **Guided Workflows & Pre-Solve Validation** | `validate` (5 tools) | Stateful 10-step modeling workflow templates, rule-based model/material/boundary/mesh/study completeness validator, and bilingual (EN/ZH) modeling assistant. |
-| **Embedded Guides & Optional PDF RAG** | `rag` (5 tools) | Built-in offline guides + symptom troubleshooting + optional ChromaDB/PyMuPDF semantic search supporting **both** local `sentence-transformers` and OpenAI-compatible/DashScope API embeddings. |
+| **Embedded Guides & Optional PDF RAG** | `rag` (11 tools) | Built-in offline guides + troubleshooting + `pdf_*` parity aliases + optional ChromaDB/PyMuPDF semantic search supporting **both** local `sentence-transformers` and OpenAI-compatible/DashScope API embeddings. |
 | **Dry-Run Simulator & Java Codegen** | `dryrun` (4 tools) | Full in-memory simulator for testing without a COMSOL license + standalone offline COMSOL Java model generator (`generate_model_java`). |
+
+**Total with `COMSOL_MCP_PROFILES=all`: 179 unique tools (100% 135/135 classic COMSOL-MCP tool parity + 44 unified batch/GUI/validation/catalog/dryrun tools) + 4 MCP resources.**
 
 Also includes a zero-dependency local status dashboard (`comsol-mcp web`) and CLI diagnostics (`comsol-mcp doctor`).
 
@@ -48,7 +50,7 @@ This parses your installed `<COMSOL_HOME>/data/completion/*.xml` into `./catalog
 
 ### 4. Configure Your MCP Client
 
-**Full unified server (all 66 tools + 4 resources):**
+**Full unified server (all 179 tools + 4 resources, including 100% 135/135 classic COMSOL-MCP parity):**
 ```json
 {
   "mcpServers": {
