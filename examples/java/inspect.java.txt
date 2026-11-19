@@ -1,0 +1,20 @@
+System.out.println("=== PARAMETERS ===");
+for (String p : model.param().varnames()) {
+  System.out.println("  " + p + " = " + model.param().get(p));
+}
+System.out.println("=== COMPONENTS ===");
+for (String c : model.component().tags()) {
+  System.out.println("Component: " + c);
+  for (String g : model.component(c).geom().tags()) {
+    System.out.println("  Geom: " + g + " -> " + java.util.Arrays.toString(model.component(c).geom(g).feature().tags()));
+  }
+  for (String ph : model.component(c).physics().tags()) {
+    System.out.println("  Physics: " + ph + " (" + model.component(c).physics(ph).getType() + ") -> "
+        + java.util.Arrays.toString(model.component(c).physics(ph).feature().tags()));
+  }
+  for (String m : model.component(c).mesh().tags()) {
+    System.out.println("  Mesh: " + m);
+  }
+}
+System.out.println("=== STUDIES ===");
+System.out.println("  " + java.util.Arrays.toString(model.study().tags()));

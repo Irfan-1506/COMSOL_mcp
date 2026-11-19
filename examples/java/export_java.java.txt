@@ -1,0 +1,3 @@
+String exportPath = model.modelPath() + java.io.File.separator + "ExportedModel.java";
+model.save(exportPath, "java");
+System.out.println("EXPORTED_JAVA=" + exportPath);

@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local secrets & machine configs
+.env
+env.local
+mcp-config.json
+
+# COMSOL models, batch jobs, binaries & vendor documentation
+models/
+comsol_models/
+*.mph
+*.mph.lock
+*.mph.recovery
+*.mph.status
+*.class
+pdf/
+knowledge_base/
+cache/
+catalog_cache/
+
+# OS & editor files
+.DS_Store
+Thumbs.db
+*.log
+verification.json

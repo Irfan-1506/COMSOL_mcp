@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>COMSOL Unified MCP Dashboard</title>
+  <style>
+    :root { --bg:#0f172a; --card:#1e293b; --text:#e2e8f0; --muted:#94a3b8; --accent:#38bdf8; --ok:#22c55e; --warn:#f59e0b; }
+    body { margin:0; font-family:system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--text); padding:24px; }
+    h1 { margin:0 0 8px; font-size:1.5rem; }
+    .sub { color:var(--muted); margin-bottom:20px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:16px; }
+    .card { background:var(--card); border-radius:10px; padding:16px; border:1px solid #334155; }
+    .card h2 { margin:0 0 10px; font-size:1rem; color:var(--accent); }
+    pre { margin:0; white-space:pre-wrap; word-break:break-word; font-size:0.82rem; color:#cbd5e1; max-height:320px; overflow:auto; }
+    .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:0.75rem; background:#334155; margin-right:6px; }
+  </style>
+</head>
+<body>
+  <h1>COMSOL Unified MCP Dashboard</h1>
+  <div class="sub">Auto-refreshes every 4 seconds from <code>/api/status</code></div>
+  <div class="grid">
+    <div class="card"><h2>Backends &amp; Profiles</h2><pre id="backends">Loading...</pre></div>
+    <div class="card"><h2>Workspace Models</h2><pre id="models">Loading...</pre></div>
+    <div class="card"><h2>Recent Batch Jobs</h2><pre id="jobs">Loading...</pre></div>
+    <div class="card"><h2>Catalog &amp; RAG</h2><pre id="knowledge">Loading...</pre></div>
+  </div>
+  <script>
+    async function refresh() {
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        document.getElementById('backends').textContent = JSON.stringify(data.status, null, 2);
+        document.getElementById('models').textContent = JSON.stringify(data.models, null, 2);
+        document.getElementById('jobs').textContent = JSON.stringify(data.recent_jobs, null, 2);
+        document.getElementById('knowledge').textContent = JSON.stringify({catalog: data.catalog, rag: data.rag}, null, 2);
+      } catch (err) {
+        document.getElementById('backends').textContent = 'Error: ' + err;
+      }
+    }
+    refresh();
+    setInterval(refresh, 4000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+model.param().set("L", "20[mm]", "Block length");
+model.param().set("W", "10[mm]", "Block width");
+model.param().set("H", "5[mm]", "Block height");
+
+model.component().create("comp1", true);
+model.component("comp1").geom().create("geom1", 3);
+model.component("comp1").geom("geom1").create("blk1", "Block");
+model.component("comp1").geom("geom1").feature("blk1").set("size", new String[]{"L", "W", "H"});
+model.component("comp1").geom("geom1").run();
+
+model.component("comp1").mesh().create("mesh1");
+model.component("comp1").mesh("mesh1").autoMeshSize(5);
+model.component("comp1").mesh("mesh1").run();
